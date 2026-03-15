@@ -24,3 +24,9 @@ build/
 # OS
 Thumbs.db
 .DS_Store
+
+
+*.xlsx
+
+output/*.json
+output/*.xlsx
