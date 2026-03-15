@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 def filter_with_phone(listings: list[dict]) -> list[dict]:
     """
     Filter out listings that do not have a valid phone number.
+    Also tags each entry with `is_whatsapp` based on Brazilian mobile pattern.
 
     Args:
         listings: Raw list of extracted business data dicts.
@@ -21,16 +22,51 @@ def filter_with_phone(listings: list[dict]) -> list[dict]:
     Returns:
         Filtered list containing only entries with a non-empty phone field.
     """
+    from scraper.models import is_whatsapp_number
+
+    filtered = []
+    for entry in listings:
+        raw_phone = entry.get("phone")
+        phone = str(raw_phone).strip() if raw_phone else ""
+        if phone:
+            entry["is_whatsapp"] = is_whatsapp_number(phone)
+            filtered.append(entry)
+
+    removed = len(listings) - len(filtered)
+    whatsapp_count = sum(1 for e in filtered if e.get("is_whatsapp"))
+    logger.info(
+        "Filtered: %d with phone (%d WhatsApp), %d removed (no phone)",
+        len(filtered), whatsapp_count, removed,
+    )
+    return filtered
+
+
+def filter_whatsapp_only(listings: list[dict]) -> list[dict]:
+    """
+    Filter to keep ONLY listings with WhatsApp-capable (mobile) numbers.
+
+    Brazilian mobile numbers: (XX) 9XXXX-XXXX
+    Landline numbers (removed): (XX) XXXX-XXXX
+
+    Args:
+        listings: List of business data dicts (must have `is_whatsapp` field).
+
+    Returns:
+        Filtered list containing only WhatsApp-capable entries.
+    """
+    from scraper.models import is_whatsapp_number
+
     filtered = [
         entry for entry in listings
-        if entry.get("phone") and entry["phone"].strip()
+        if entry.get("is_whatsapp") or is_whatsapp_number(entry.get("phone") or "")
     ]
     removed = len(listings) - len(filtered)
     logger.info(
-        "Filtered: %d with phone, %d removed (no phone)",
+        "WhatsApp filter: %d kept, %d removed (landline)",
         len(filtered), removed,
     )
     return filtered
+
 
 
 def _slugify(text: str, max_len: int = 40) -> str:

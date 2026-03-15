@@ -56,8 +56,16 @@
       <div class="search-options">
         <div class="option-group">
           <label for="max-scrolls">Scrolls (more = more results)</label>
-          <input type="range" id="max-scrolls" min="1" max="100" value="10">
+          <input type="range" id="max-scrolls" min="1" max="1000" value="10">
           <span id="scrolls-value" class="option-value">10</span>
+        </div>
+        <div class="option-group whatsapp-toggle">
+          <label class="toggle-label" for="whatsapp-only">
+            <input type="checkbox" id="whatsapp-only" checked>
+            <span class="toggle-switch"></span>
+            <span>📱 WhatsApp only</span>
+          </label>
+          <span class="toggle-hint">Filter out landline numbers</span>
         </div>
       </div>
     </section>
@@ -150,8 +158,17 @@
     <!-- History Section -->
     <section class="history-section glass-card" id="history-section">
       <div class="history-header">
-        <h2>📁 History</h2>
-        <span class="history-count" id="history-count">0 jobs</span>
+        <div class="history-header-left">
+          <h2>📁 History</h2>
+          <span class="history-count" id="history-count">0 jobs</span>
+        </div>
+        <button id="clear-history-btn" class="btn-sm btn-delete" style="display: none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          </svg>
+          Clear All
+        </button>
       </div>
       <div class="history-list" id="history-list">
         <p class="history-empty" id="history-empty">No scraping jobs yet. Run your first search above!</p>

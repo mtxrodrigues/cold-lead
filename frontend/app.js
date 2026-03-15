@@ -10,10 +10,11 @@
  */
 
 // ─── DOM Elements ────────────────────────────────────────────
-const searchInput     = document.getElementById('search-input');
-const searchBtn       = document.getElementById('search-btn');
-const maxScrollsInput = document.getElementById('max-scrolls');
-const scrollsValue    = document.getElementById('scrolls-value');
+const searchInput      = document.getElementById('search-input');
+const searchBtn        = document.getElementById('search-btn');
+const maxScrollsInput  = document.getElementById('max-scrolls');
+const scrollsValue     = document.getElementById('scrolls-value');
+const whatsappCheckbox = document.getElementById('whatsapp-only');
 
 const progressSection = document.getElementById('progress-section');
 const progressTitle   = document.getElementById('progress-title');
@@ -37,6 +38,7 @@ const historySection  = document.getElementById('history-section');
 const historyList     = document.getElementById('history-list');
 const historyCount    = document.getElementById('history-count');
 const historyEmpty    = document.getElementById('history-empty');
+const clearHistoryBtn = document.getElementById('clear-history-btn');
 
 let currentJobId = null;
 let currentResults = [];
@@ -86,6 +88,7 @@ async function startScrape() {
         query,
         max_scrolls: parseInt(maxScrollsInput.value),
         headless: true,
+        whatsapp_only: whatsappCheckbox.checked,
       }),
     });
 
@@ -222,10 +225,14 @@ function renderResults(results) {
 
   results.forEach((item, i) => {
     const tr = document.createElement('tr');
+    const phoneBadge = item.is_whatsapp
+      ? '<span class="whatsapp-badge">📱 WhatsApp</span>'
+      : '<span class="landline-badge">☎ Fixo</span>';
+
     tr.innerHTML = `
       <td>${i + 1}</td>
       <td>${escapeHtml(item.name || '—')}</td>
-      <td>${escapeHtml(item.phone || '—')}</td>
+      <td>${escapeHtml(item.phone || '—')}${item.phone ? phoneBadge : ''}</td>
       <td>${escapeHtml(item.address || '—')}</td>
       <td>${item.rating ? `<span class="rating-badge">★ ${escapeHtml(item.rating)}</span>` : '—'}</td>
       <td>${item.website
@@ -283,10 +290,12 @@ function renderHistory(jobs) {
   if (!jobs.length) {
     historyList.innerHTML = '<p class="history-empty">No scraping jobs yet. Run your first search above!</p>';
     historyCount.textContent = '0 jobs';
+    clearHistoryBtn.style.display = 'none';
     return;
   }
 
   historyCount.textContent = `${jobs.length} job${jobs.length !== 1 ? 's' : ''}`;
+  clearHistoryBtn.style.display = 'inline-flex';
 
   jobs.forEach((job, i) => {
     const card = document.createElement('div');
@@ -318,6 +327,9 @@ function renderHistory(jobs) {
           <button class="btn-sm" data-action="json" data-id="${job.id}" title="Download JSON">⬇ JSON</button>
           <button class="btn-sm xlsx" data-action="xlsx" data-id="${job.id}" title="Download XLSX">📊 XLSX</button>
         ` : ''}
+        ${job.status !== 'running' ? `
+          <button class="btn-sm delete" data-action="delete" data-id="${job.id}" title="Delete job">🗑️</button>
+        ` : ''}
       </div>
     `;
 
@@ -335,6 +347,8 @@ function renderHistory(jobs) {
           window.open(`/api/scrape/${id}/download`, '_blank');
         } else if (action === 'xlsx') {
           window.open(`/api/scrape/${id}/xlsx`, '_blank');
+        } else if (action === 'delete') {
+          deleteJob(id);
         }
       });
     });
@@ -350,6 +364,46 @@ function renderHistory(jobs) {
     historyList.appendChild(card);
   });
 }
+
+async function deleteJob(id) {
+  if (!confirm('Delete this job from history? Files will also be deleted.')) return;
+
+  try {
+    const res = await fetch(`/api/jobs/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Failed to delete job');
+    
+    // Clear results UI if the deleted job was currently loaded
+    if (currentJobId === id) {
+      resultsSection.classList.add('hidden');
+      statsSection.classList.add('hidden');
+      currentJobId = null;
+    }
+    
+    showToast('Job deleted');
+    loadHistory();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
+
+clearHistoryBtn.addEventListener('click', async () => {
+  if (!confirm('Clear ALL non-running jobs from history? This cannot be undone.')) return;
+
+  try {
+    const res = await fetch('/api/jobs', { method: 'DELETE' });
+    if (!res.ok) throw new Error('Failed to clear history');
+    
+    // Clear results UI
+    resultsSection.classList.add('hidden');
+    statsSection.classList.add('hidden');
+    currentJobId = null;
+    
+    showToast('History cleared');
+    loadHistory();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+});
 
 // ─── Helpers ─────────────────────────────────────────────────
 function resetSearchBtn() {

@@ -339,6 +339,90 @@ body {
   text-align: right;
 }
 
+/* --- WhatsApp toggle --- */
+.whatsapp-toggle {
+  margin-top: 12px;
+  justify-content: flex-start;
+}
+
+.toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle-label input[type="checkbox"] {
+  display: none;
+}
+
+.toggle-switch {
+  width: 36px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  position: relative;
+  transition: background 0.3s;
+  flex-shrink: 0;
+}
+
+.toggle-switch::after {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  background: var(--text-muted);
+  border-radius: 50%;
+  top: 2px;
+  left: 2px;
+  transition: transform 0.3s, background 0.3s;
+}
+
+.toggle-label input:checked + .toggle-switch {
+  background: rgba(37, 211, 102, 0.3);
+}
+
+.toggle-label input:checked + .toggle-switch::after {
+  transform: translateX(16px);
+  background: #25D366;
+}
+
+.toggle-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+/* --- WhatsApp badge --- */
+.whatsapp-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  background: rgba(37, 211, 102, 0.12);
+  border-radius: 4px;
+  color: #25D366;
+  font-size: 10px;
+  font-weight: 600;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.landline-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 500;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
 /* --- Progress Section --- */
 .progress-section {
   padding: 28px;
@@ -654,6 +738,12 @@ td:nth-child(5) {
   margin-bottom: 16px;
 }
 
+.history-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .history-header h2 {
   font-size: 18px;
   font-weight: 700;
@@ -774,6 +864,37 @@ td:nth-child(5) {
 .history-card-actions .btn-sm.xlsx:hover {
   border-color: var(--success);
   color: var(--success);
+}
+
+.history-card-actions .btn-sm.delete {
+  color: var(--error);
+  border-color: transparent;
+}
+
+.history-card-actions .btn-sm.delete:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.btn-delete {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--error);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: var(--font);
+}
+
+.btn-delete:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: var(--error);
 }
 
 /* --- Footer --- */

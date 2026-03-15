@@ -28,7 +28,7 @@ from sse_starlette.sse import EventSourceResponse
 from scraper.browser import setup_browser, teardown_browser
 from scraper.scroll import scroll_results
 from scraper.extract import search_maps, extract_listings
-from scraper.output import filter_with_phone, save_to_json, export_to_xlsx, make_filename
+from scraper.output import filter_with_phone, filter_whatsapp_only, save_to_json, export_to_xlsx, make_filename
 
 # ---------------------------------------------------------------------------
 # App setup
@@ -106,12 +106,13 @@ class ScrapeRequest(BaseModel):
     query: str
     max_scrolls: int = 50
     headless: bool = True
+    whatsapp_only: bool = False
 
 
 # ---------------------------------------------------------------------------
 # Scraping worker (runs in a background thread)
 # ---------------------------------------------------------------------------
-def _run_scrape(job_id: str, query: str, max_scrolls: int, headless: bool):
+def _run_scrape(job_id: str, query: str, max_scrolls: int, headless: bool, whatsapp_only: bool = False):
     """Execute the scraping pipeline in a background thread."""
     job = jobs[job_id]
 
@@ -153,12 +154,23 @@ def _run_scrape(job_id: str, query: str, max_scrolls: int, headless: bool):
         log(f"✅ Extracted {len(raw_data)} listings")
         job["total_extracted"] = len(raw_data)
 
-        # Step 5: Filter
+        # Step 5: Filter — phone
         log("📞 Filtering listings without phone...")
         filtered = filter_with_phone(raw_data)
         job["total_with_phone"] = len(filtered)
         job["total_without_phone"] = len(raw_data) - len(filtered)
-        log(f"✅ {len(filtered)} with phone, {len(raw_data) - len(filtered)} removed")
+        whatsapp_count = sum(1 for e in filtered if e.get("is_whatsapp"))
+        landline_count = len(filtered) - whatsapp_count
+        log(f"✅ {len(filtered)} with phone ({whatsapp_count} WhatsApp, {landline_count} landline)")
+
+        # Step 5b: Filter — WhatsApp only (if enabled)
+        if whatsapp_only:
+            log("📱 Filtering for WhatsApp numbers only...")
+            filtered = filter_whatsapp_only(filtered)
+            log(f"✅ {len(filtered)} WhatsApp leads kept")
+
+        job["total_whatsapp"] = sum(1 for e in filtered if e.get("is_whatsapp"))
+        job["total_leads"] = len(filtered)
 
         # Step 6: Save JSON with descriptive filename
         json_filename = make_filename(query, ext="json")
@@ -229,7 +241,7 @@ async def start_scrape(req: ScrapeRequest):
     # Run scraping in background thread
     thread = threading.Thread(
         target=_run_scrape,
-        args=(job_id, req.query, req.max_scrolls, req.headless),
+        args=(job_id, req.query, req.max_scrolls, req.headless, req.whatsapp_only),
         daemon=True,
     )
     thread.start()
@@ -395,6 +407,58 @@ async def list_jobs():
         }
         for j in sorted(jobs.values(), key=lambda x: x.get("created_at", ""), reverse=True)
     ]
+
+
+@app.delete("/api/jobs/{job_id}")
+async def delete_job(job_id: str):
+    """Delete a specific job and its associated files."""
+    if job_id not in jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    job = jobs[job_id]
+    if job["status"] == "running":
+        raise HTTPException(status_code=400, detail="Cannot delete a running job")
+
+    # Delete associated files
+    for key in ["output_file", "xlsx_file"]:
+        if job.get(key):
+            filepath = OUTPUT_DIR / job[key]
+            if filepath.exists():
+                try:
+                    filepath.unlink()
+                    logger.info("Deleted file: %s", filepath)
+                except Exception as e:
+                    logger.warning("Failed to delete file %s: %s", filepath, e)
+
+    # Remove from memory and save index
+    del jobs[job_id]
+    _save_jobs_index()
+    logger.info("Deleted job: %s", job_id)
+    return {"status": "success"}
+
+
+@app.delete("/api/jobs")
+async def clear_all_jobs():
+    """Delete all non-running jobs and their associated files."""
+    to_delete = [jid for jid, j in jobs.items() if j["status"] != "running"]
+    deleted_count = 0
+
+    for jid in to_delete:
+        job = jobs[jid]
+        for key in ["output_file", "xlsx_file"]:
+            if job.get(key):
+                filepath = OUTPUT_DIR / job[key]
+                if filepath.exists():
+                    try:
+                        filepath.unlink()
+                    except Exception as e:
+                        logger.warning("Failed to delete file %s: %s", filepath, e)
+        del jobs[jid]
+        deleted_count += 1
+
+    _save_jobs_index()
+    logger.info("Cleared %d jobs from history", deleted_count)
+    return {"status": "success", "deleted": deleted_count}
 
 
 # ---------------------------------------------------------------------------

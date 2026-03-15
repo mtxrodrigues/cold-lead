@@ -52,35 +52,47 @@ def scroll_results(
             logger.info("Reached end of list at scroll %d", i)
             break
 
-        # Scroll the last element of the feed into view
-        items = feed.locator(":scope > div")
-        current_count = items.count()
+        current_count = feed.locator(":scope > div").count()
 
         if current_count == 0:
             logger.warning("No items found in feed on scroll %d", i)
             break
 
-        # Scroll the last item into view to trigger lazy loading
-        items.nth(current_count - 1).scroll_into_view_if_needed()
-
-        # Also try using keyboard to scroll
-        feed.press("End")
+        # Scroll the feed aggressively using JS
+        try:
+            feed.evaluate("el => el.scrollTo(0, el.scrollHeight)")
+        except Exception as e:
+            logger.warning("Failed to evaluate scroll: %s", e)
 
         pause = random.uniform(pause_min, pause_max)
         logger.info(
-            "Scroll %d/%d — %d items loaded (pause %.1fs)",
+            "Scroll %d/%d — %d internal items (%.1fs pause)",
             i, max_scrolls, current_count, pause,
         )
         time.sleep(pause)
 
         # Check if we got new results
-        new_count = items.count()
-        if new_count == previous_count and i > 3:
-            # Give it two more tries in case loading is slow
-            time.sleep(2)
-            new_count = feed.locator(":scope > div").count()
-            if new_count == previous_count:
-                logger.info("No new results after scroll %d — stopping", i)
+        new_count = feed.locator(":scope > div").count()
+        if new_count == previous_count:
+            # Wait up to 6 seconds for more items to load
+            loaded_more = False
+            for extra_wait in range(6):
+                time.sleep(1.0)
+                try:
+                    feed.evaluate("el => el.scrollTo(0, el.scrollHeight)")
+                except Exception:
+                    pass
+                new_count = feed.locator(":scope > div").count()
+                if new_count > previous_count:
+                    loaded_more = True
+                    break
+
+            if not loaded_more:
+                # Even after waiting, no new items
+                if end_marker.count() > 0 or end_marker_pt.count() > 0:
+                    logger.info("Reached end of list during wait at scroll %d", i)
+                else:
+                    logger.info("No new results after scroll %d (timeout) — stopping", i)
                 break
 
         previous_count = new_count
