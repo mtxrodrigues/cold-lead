@@ -2,9 +2,7 @@
 
 **Google Maps Local Business Scraper** — Extract names, addresses, and phone numbers from Google Maps search results, filtering out listings without a registered phone number.
 
-Built with **Python** and **Playwright** for reliable, JavaScript-rendered page scraping.
-
-> ⚠️ This is an MVP. A REST API layer is planned for future releases.
+Built with **Python**, **Playwright**, and **FastAPI**. Includes a premium dark-mode web UI with real-time progress streaming.
 
 ---
 
@@ -60,20 +58,18 @@ copy .env.example .env
 # Edit .env to customize settings
 ```
 
-### 6. Run the scraper
+### 6. Run
 
+**Web UI (recommended):**
 ```bash
-# Basic usage
+python -m uvicorn server:app --reload --port 8000
+# Open http://localhost:8000
+```
+
+**CLI:**
+```bash
 python main.py --query "clinicas em São Paulo"
-
-# With visible browser (for debugging)
 python main.py --query "dentistas em Curitiba" --no-headless
-
-# Custom output file
-python main.py --query "restaurantes em Rio de Janeiro" --output restaurants.json
-
-# Verbose logging
-python main.py --query "academias em Belo Horizonte" -v
 ```
 
 ---
@@ -119,16 +115,20 @@ python main.py --query "academias em Belo Horizonte" -v
 
 ```
 cold-lead/
-├── main.py                 # CLI entry point — orchestrates the pipeline
-├── requirements.txt        # Python dependencies
-├── .env.example            # Environment configuration template
-├── .gitignore
+├── main.py                 # CLI entry point
+├── server.py               # FastAPI web server (SSE + REST API)
+├── requirements.txt
+├── .env.example
 ├── scraper/
 │   ├── __init__.py
-│   ├── browser.py          # Playwright browser setup & teardown
-│   ├── scroll.py           # Sidebar scrolling to load all listings
-│   ├── extract.py          # Data extraction from listing detail panels
+│   ├── browser.py          # Playwright browser setup
+│   ├── scroll.py           # Sidebar scrolling logic
+│   ├── extract.py          # Data extraction from listings
 │   └── output.py           # Phone filtering & JSON export
+├── frontend/
+│   ├── index.html          # Web UI
+│   ├── style.css           # Dark theme + glassmorphism
+│   └── app.js              # SSE client + interactivity
 └── output/                 # Generated JSON files (gitignored)
 ```
 
@@ -162,7 +162,8 @@ Removes any listing without a valid phone number and writes the clean data to a 
 
 ## Roadmap
 
-- [ ] **REST API** — FastAPI wrapper for programmatic access
+- [x] **REST API** — FastAPI with SSE real-time progress
+- [x] **Web UI** — Dark-mode frontend with live stats
 - [ ] **Async support** — Playwright async API for better throughput
 - [ ] **Proxy rotation** — Avoid rate-limiting on large scrapes
 - [ ] **Database storage** — PostgreSQL/MongoDB for persistent data

@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cold Lead — Google Maps Scraper</title>
+  <meta name="description" content="Extract business data from Google Maps — names, phones, addresses, ratings.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+  <!-- Animated background blobs -->
+  <div class="bg-blobs">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+  </div>
+
+  <div class="app">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo">
+        <span class="logo-icon">🧊</span>
+        <h1>Cold Lead</h1>
+      </div>
+      <p class="subtitle">Google Maps Scraper — Extract leads in seconds</p>
+    </header>
+
+    <!-- Search Section -->
+    <section class="search-section glass-card" id="search-section">
+      <div class="search-bar">
+        <div class="search-input-wrapper">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/>
+            <path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input
+            type="text"
+            id="search-input"
+            placeholder="Ex: clinicas em São Paulo, dentistas em Curitiba..."
+            autocomplete="off"
+          />
+        </div>
+        <button id="search-btn" class="btn-primary">
+          <span class="btn-text">Scrape</span>
+          <svg class="btn-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Options -->
+      <div class="search-options">
+        <div class="option-group">
+          <label for="max-scrolls">Scrolls (more = more results)</label>
+          <input type="range" id="max-scrolls" min="1" max="100" value="10">
+          <span id="scrolls-value" class="option-value">10</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Progress Section -->
+    <section class="progress-section glass-card hidden" id="progress-section">
+      <div class="progress-header">
+        <h2 id="progress-title">Scraping...</h2>
+        <div class="pulse-dot" id="pulse-dot"></div>
+      </div>
+      <div class="progress-bar-wrapper">
+        <div class="progress-bar" id="progress-bar"></div>
+      </div>
+      <div class="log-container" id="log-container">
+        <!-- Logs appear here -->
+      </div>
+    </section>
+
+    <!-- Stats Section -->
+    <section class="stats-section hidden" id="stats-section">
+      <div class="stat-card glass-card">
+        <span class="stat-number" id="stat-found">0</span>
+        <span class="stat-label">Found</span>
+      </div>
+      <div class="stat-card glass-card">
+        <span class="stat-number" id="stat-extracted">0</span>
+        <span class="stat-label">Extracted</span>
+      </div>
+      <div class="stat-card glass-card accent">
+        <span class="stat-number" id="stat-phone">0</span>
+        <span class="stat-label">With Phone</span>
+      </div>
+      <div class="stat-card glass-card">
+        <span class="stat-number" id="stat-no-phone">0</span>
+        <span class="stat-label">No Phone</span>
+      </div>
+    </section>
+
+    <!-- Results Section -->
+    <section class="results-section glass-card hidden" id="results-section">
+      <div class="results-header">
+        <h2>Results</h2>
+        <div class="results-actions">
+          <button id="download-btn" class="btn-secondary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Download JSON
+          </button>
+          <button id="copy-btn" class="btn-secondary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+            Copy All Phones
+          </button>
+        </div>
+      </div>
+
+      <div class="table-wrapper">
+        <table id="results-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Name</th>
+              <th>Phone</th>
+              <th>Address</th>
+              <th>Rating</th>
+              <th>Website</th>
+            </tr>
+          </thead>
+          <tbody id="results-body">
+            <!-- Rows populated by JS -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <p>Cold Lead v1.0 — Built with Playwright + FastAPI</p>
+    </footer>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
