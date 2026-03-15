@@ -627,6 +627,155 @@ td:nth-child(5) {
   font-size: 12px;
 }
 
+/* --- XLSX button accent --- */
+.btn-xlsx {
+  border-color: rgba(16, 185, 129, 0.3);
+  color: var(--success);
+}
+
+.btn-xlsx:hover {
+  border-color: var(--success);
+  background: rgba(16, 185, 129, 0.08);
+  color: var(--success);
+}
+
+/* --- History Section --- */
+.history-section {
+  padding: 28px;
+  margin-top: 24px;
+  margin-bottom: 24px;
+  animation: fadeInUp 0.6s ease-out 0.2s both;
+}
+
+.history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.history-header h2 {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.history-count {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  padding: 4px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+}
+
+.history-empty {
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+  padding: 20px 0;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.02);
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.history-card:hover {
+  border-color: var(--border-hover);
+  background: var(--surface-hover);
+}
+
+.history-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.history-query {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.history-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.history-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.history-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--success);
+}
+
+.history-status-dot.error {
+  background: var(--error);
+}
+
+.history-status-dot.running {
+  background: var(--warning);
+  animation: pulse 1.5s infinite;
+}
+
+.history-card-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.history-card-actions .btn-sm {
+  padding: 6px 10px;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--font);
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.history-card-actions .btn-sm:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.history-card-actions .btn-sm.xlsx:hover {
+  border-color: var(--success);
+  color: var(--success);
+}
+
 /* --- Footer --- */
 .footer {
   text-align: center;

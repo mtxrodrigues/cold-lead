@@ -109,6 +109,15 @@
             </svg>
             Download JSON
           </button>
+          <button id="xlsx-btn" class="btn-secondary btn-xlsx">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+            </svg>
+            Download XLSX
+          </button>
           <button id="copy-btn" class="btn-secondary">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
               <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
@@ -138,9 +147,20 @@
       </div>
     </section>
 
+    <!-- History Section -->
+    <section class="history-section glass-card" id="history-section">
+      <div class="history-header">
+        <h2>📁 History</h2>
+        <span class="history-count" id="history-count">0 jobs</span>
+      </div>
+      <div class="history-list" id="history-list">
+        <p class="history-empty" id="history-empty">No scraping jobs yet. Run your first search above!</p>
+      </div>
+    </section>
+
     <!-- Footer -->
     <footer class="footer">
-      <p>Cold Lead v1.0 — Built with Playwright + FastAPI</p>
+      <p>Cold Lead v1.1 — Built with Playwright + FastAPI</p>
     </footer>
   </div>
 
