@@ -2,20 +2,21 @@
 Cold Lead — Google Maps Local Business Scraper
 
 CLI entry point that orchestrates the scraping pipeline:
-  setup_browser → search_maps → scroll_results → extract_listings
-  → filter_with_phone → save_to_json
+  setup_browser → search_maps → scroll_results → collect_urls
+  → extract_parallel → filter_with_phone → save_to_json
 """
 
 import argparse
 import logging
 import sys
 import os
+import asyncio
 
 from dotenv import load_dotenv
 
 from scraper.browser import setup_browser, teardown_browser
 from scraper.scroll import scroll_results
-from scraper.extract import search_maps, extract_listings
+from scraper.extract import search_maps, collect_listing_urls, extract_listings_parallel
 from scraper.output import filter_with_phone, save_to_json
 
 # Load .env if present
@@ -36,7 +37,7 @@ def parse_args() -> argparse.Namespace:
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
         prog="cold-lead",
-        description="🔍 Scrape local business data from Google Maps",
+        description="🔍 Scrape local business data from Google Maps (Parallel)",
         epilog="Example: python main.py --query 'clinicas em São Paulo'",
     )
     parser.add_argument(
@@ -79,7 +80,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def main() -> int:
+async def main() -> int:
     """Main pipeline."""
     args = parse_args()
     configure_logging(args.verbose)
@@ -89,7 +90,8 @@ def main() -> int:
     headless = args.headless and not args.no_headless
 
     logger.info("=" * 60)
-    logger.info("Cold Lead — Google Maps Scraper")
+    logger.info("Cold Lead — Google Maps Scraper (Parallel)")
+    logger.info("Developed by @jsaraivx (https://github.com/jsaraivx)")
     logger.info("=" * 60)
     logger.info("Query:    %s", args.query)
     logger.info("Output:   %s/%s", args.output_dir, args.output)
@@ -101,23 +103,32 @@ def main() -> int:
 
     try:
         # Step 1: Launch browser
-        pw, browser, page = setup_browser(headless=headless)
+        pw, browser, context, page = await setup_browser(headless=headless)
 
         # Step 2: Search Google Maps
-        search_maps(page, args.query)
+        await search_maps(page, args.query)
 
         # Step 3: Scroll to load all results
-        total_found = scroll_results(page, max_scrolls=args.max_scrolls)
+        total_found = await scroll_results(page, max_scrolls=args.max_scrolls)
         logger.info("Total listings found after scrolling: %d", total_found)
 
-        # Step 4: Extract data from each listing
-        raw_data = extract_listings(page)
+        # Step 4: Phase 1 Discovery -> Collect all listing URLs
+        locations = await collect_listing_urls(page)
+        
+        # We can safely close the main search page now to free up RAM
+        try:
+            await page.close()
+        except Exception:
+            pass
+
+        # Step 5: Phase 2 Parallel Extraction
+        raw_data = await extract_listings_parallel(context, locations, max_concurrent=5)
         logger.info("Extracted data from %d listings", len(raw_data))
 
-        # Step 5: Filter — only keep entries with a phone number
+        # Step 6: Filter — only keep entries with a phone number
         filtered_data = filter_with_phone(raw_data)
 
-        # Step 6: Save to JSON
+        # Step 7: Save to JSON
         output_path = save_to_json(
             filtered_data,
             filename=args.output,
@@ -146,8 +157,8 @@ def main() -> int:
 
     finally:
         if browser and pw:
-            teardown_browser(pw, browser)
+            await teardown_browser(pw, browser)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(asyncio.run(main()))

@@ -172,6 +172,12 @@ Removes any listing without a valid phone number and writes the clean data to a 
 
 ---
 
+## Credits
+
+Developed by [@jsaraivx](https://github.com/jsaraivx).
+
+---
+
 ## License
 
 MIT

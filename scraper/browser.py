@@ -3,7 +3,7 @@ browser.py — Browser setup and teardown using Playwright.
 """
 
 import logging
-from playwright.sync_api import sync_playwright, Browser, Page
+from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 
 logger = logging.getLogger(__name__)
 
@@ -15,23 +15,22 @@ USER_AGENT = (
 )
 
 
-def setup_browser(headless: bool = True, timeout: int = 60_000) -> tuple:
+async def setup_browser(headless: bool = True, timeout: int = 60_000) -> tuple:
     """
-    Launch a Chromium browser instance via Playwright.
+    Launch a Chromium browser instance via Playwright asynchronously.
 
     Args:
-        headless: Run browser without a visible window (True for production).
+        headless: Run browser without a visible window.
         timeout: Default navigation timeout in milliseconds.
 
     Returns:
-        Tuple of (playwright_instance, browser, page) — caller is responsible
-        for calling teardown_browser() when done.
+        Tuple of (playwright_instance, browser, context, page)
     """
     logger.info("Launching browser (headless=%s, timeout=%dms)", headless, timeout)
 
-    pw = sync_playwright().start()
+    pw = await async_playwright().start()
 
-    browser = pw.chromium.launch(
+    browser = await pw.chromium.launch(
         headless=headless,
         args=[
             "--disable-blink-features=AutomationControlled",
@@ -39,7 +38,7 @@ def setup_browser(headless: bool = True, timeout: int = 60_000) -> tuple:
         ],
     )
 
-    context = browser.new_context(
+    context = await browser.new_context(
         user_agent=USER_AGENT,
         viewport={"width": 1280, "height": 900},
         locale="pt-BR",
@@ -47,16 +46,16 @@ def setup_browser(headless: bool = True, timeout: int = 60_000) -> tuple:
         permissions=["geolocation"],
     )
 
-    page = context.new_page()
+    page = await context.new_page()
     page.set_default_timeout(timeout)
     page.set_default_navigation_timeout(timeout)
 
     logger.info("Browser ready")
-    return pw, browser, page
+    return pw, browser, context, page
 
 
-def teardown_browser(pw, browser: Browser) -> None:
+async def teardown_browser(pw, browser: Browser) -> None:
     """Close the browser and stop Playwright."""
     logger.info("Shutting down browser")
-    browser.close()
-    pw.stop()
+    await browser.close()
+    await pw.stop()

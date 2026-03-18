@@ -14,7 +14,7 @@ Provides:
 import os
 import uuid
 import json
-import threading
+import asyncio
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -27,7 +27,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from scraper.browser import setup_browser, teardown_browser
 from scraper.scroll import scroll_results
-from scraper.extract import search_maps, extract_listings
+from scraper.extract import search_maps, collect_listing_urls, extract_listings_parallel
 from scraper.output import filter_with_phone, filter_whatsapp_only, save_to_json, export_to_xlsx, make_filename
 
 # ---------------------------------------------------------------------------
@@ -112,8 +112,8 @@ class ScrapeRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # Scraping worker (runs in a background thread)
 # ---------------------------------------------------------------------------
-def _run_scrape(job_id: str, query: str, max_scrolls: int, headless: bool, whatsapp_only: bool = False):
-    """Execute the scraping pipeline in a background thread."""
+async def _run_scrape_async(job_id: str, query: str, max_scrolls: int, headless: bool, whatsapp_only: bool = False):
+    """Execute the scraping pipeline asynchronously in the background."""
     job = jobs[job_id]
 
     def log(message: str, level: str = "info"):
@@ -130,27 +130,34 @@ def _run_scrape(job_id: str, query: str, max_scrolls: int, headless: bool, whats
 
     try:
         job["status"] = "running"
-        log("🚀 Starting scraper...")
+        log("🚀 Starting parallel scraper...")
 
         # Step 1: Browser
         log("🌐 Launching browser...")
-        pw, browser, page = setup_browser(headless=headless)
+        pw, browser, context, page = await setup_browser(headless=headless)
         log("✅ Browser ready")
 
         # Step 2: Search
         log(f'🔍 Searching: "{query}"')
-        search_maps(page, query)
+        await search_maps(page, query)
         log("✅ Search results loaded")
 
         # Step 3: Scroll
         log(f"📜 Scrolling results (max {max_scrolls} scrolls)...")
-        total_found = scroll_results(page, max_scrolls=max_scrolls)
+        total_found = await scroll_results(page, max_scrolls=max_scrolls)
         log(f"✅ Found {total_found} listings after scrolling")
         job["total_found"] = total_found
 
-        # Step 4: Extract
-        log("⛏️ Extracting data from each listing...")
-        raw_data = extract_listings(page)
+        # Step 4: Extract (Phase 1 & 2)
+        log("🔗 Collecting URLs from results feed...")
+        locations = await collect_listing_urls(page)
+        try:
+            await page.close()
+        except Exception:
+            pass
+
+        log("⛏️ Extracting data from each listing in parallel...")
+        raw_data = await extract_listings_parallel(context, locations, max_concurrent=5)
         log(f"✅ Extracted {len(raw_data)} listings")
         job["total_extracted"] = len(raw_data)
 
@@ -203,7 +210,7 @@ def _run_scrape(job_id: str, query: str, max_scrolls: int, headless: bool, whats
     finally:
         if pw and browser:
             try:
-                teardown_browser(pw, browser)
+                await teardown_browser(pw, browser)
             except Exception:
                 pass
 
@@ -238,13 +245,10 @@ async def start_scrape(req: ScrapeRequest):
     # Persist immediately so it shows in history even if queued
     _save_jobs_index()
 
-    # Run scraping in background thread
-    thread = threading.Thread(
-        target=_run_scrape,
-        args=(job_id, req.query, req.max_scrolls, req.headless, req.whatsapp_only),
-        daemon=True,
+    # Run scraping asynchronously in the background
+    asyncio.create_task(
+        _run_scrape_async(job_id, req.query, req.max_scrolls, req.headless, req.whatsapp_only)
     )
-    thread.start()
 
     return {"job_id": job_id}
 
