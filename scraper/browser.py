@@ -14,34 +14,26 @@ USER_AGENT = (
     "Chrome/124.0.0.0 Safari/537.36"
 )
 
-_global_pw = None
-_global_browser = None
-
 async def setup_browser(headless: bool = True, timeout: int = 60_000) -> tuple:
     """
     Launch a Chromium browser instance via Playwright asynchronously.
-    Re-uses the same global browser instance to prevent Event Loop crashes on multiple HTTP requests.
 
     Returns:
         Tuple of (playwright_instance, browser, context, page)
     """
-    global _global_pw, _global_browser
-    
     logger.info("Preparing browser (headless=%s, timeout=%dms)", headless, timeout)
 
-    if _global_pw is None:
-        _global_pw = await async_playwright().start()
+    pw = await async_playwright().start()
 
-    if _global_browser is None:
-        _global_browser = await _global_pw.chromium.launch(
-            headless=headless,
-            args=[
-                "--disable-blink-features=AutomationControlled",
-                "--no-sandbox",
-            ],
-        )
+    browser = await pw.chromium.launch(
+        headless=headless,
+        args=[
+            "--disable-blink-features=AutomationControlled",
+            "--no-sandbox",
+        ],
+    )
 
-    context = await _global_browser.new_context(
+    context = await browser.new_context(
         user_agent=USER_AGENT,
         viewport={"width": 1280, "height": 900},
         locale="pt-BR",
@@ -54,16 +46,13 @@ async def setup_browser(headless: bool = True, timeout: int = 60_000) -> tuple:
     page.set_default_navigation_timeout(timeout)
 
     logger.info("Browser context ready")
-    return _global_pw, _global_browser, context, page
+    return pw, browser, context, page
 
 
 async def teardown_browser(pw, browser: Browser) -> None:
-    """Close the global browser and stop Playwright (Used mainly by CLI)."""
-    global _global_pw, _global_browser
-    logger.info("Shutting down global browser")
-    if _global_browser:
-        await _global_browser.close()
-        _global_browser = None
-    if _global_pw:
-        await _global_pw.stop()
-        _global_pw = None
+    """Close the browser and stop Playwright (Used mainly by CLI)."""
+    logger.info("Shutting down browser")
+    if browser:
+        await browser.close()
+    if pw:
+        await pw.stop()

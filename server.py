@@ -46,8 +46,10 @@ JOBS_INDEX = OUTPUT_DIR / "jobs.json"
 # In-memory job store — hydrated from disk on startup
 jobs: dict[str, dict] = {}
 
-# Strong references to running tasks to prevent Python GC from destroying them midway
-running_tasks = set()
+import threading
+
+# Add a lock for safe thread access to JSON
+jobs_lock = threading.Lock()
 
 logger = logging.getLogger("cold-lead.server")
 logging.basicConfig(
@@ -78,28 +80,29 @@ def _load_jobs_index():
 
 def _save_jobs_index():
     """Persist the jobs index to disk (metadata only, no full results)."""
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    index_data = []
-    for j in sorted(jobs.values(), key=lambda x: x.get("created_at", ""), reverse=True):
-        # Save metadata only — results are in separate JSON files
-        index_data.append({
-            "id": j["id"],
-            "query": j["query"],
-            "status": j["status"],
-            "created_at": j["created_at"],
-            "total_found": j.get("total_found", 0),
-            "total_extracted": j.get("total_extracted", 0),
-            "total_with_phone": j.get("total_with_phone", 0),
-            "total_without_phone": j.get("total_without_phone", 0),
-            "output_file": j.get("output_file"),
-            "xlsx_file": j.get("xlsx_file"),
-            "error": j.get("error"),
-        })
-    try:
-        with open(JOBS_INDEX, "w", encoding="utf-8") as f:
-            json.dump(index_data, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        logger.warning("Failed to save jobs index: %s", e)
+    with jobs_lock:
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        index_data = []
+        for j in sorted(jobs.values(), key=lambda x: x.get("created_at", ""), reverse=True):
+            # Save metadata only — results are in separate JSON files
+            index_data.append({
+                "id": j["id"],
+                "query": j["query"],
+                "status": j["status"],
+                "created_at": j["created_at"],
+                "total_found": j.get("total_found", 0),
+                "total_extracted": j.get("total_extracted", 0),
+                "total_with_phone": j.get("total_with_phone", 0),
+                "total_without_phone": j.get("total_without_phone", 0),
+                "output_file": j.get("output_file"),
+                "xlsx_file": j.get("xlsx_file"),
+                "error": j.get("error"),
+            })
+        try:
+            with open(JOBS_INDEX, "w", encoding="utf-8") as f:
+                json.dump(index_data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.warning("Failed to save jobs index: %s", e)
 
 
 # Load on startup
@@ -164,7 +167,7 @@ async def _run_scrape_async(job_id: str, query: str, max_scrolls: int, headless:
             pass
 
         log("⛏️ Extracting data from each listing in parallel...")
-        raw_data = await extract_listings_parallel(context, locations, max_concurrent=5)
+        raw_data = await extract_listings_parallel(context, locations, max_concurrent=7)
         log(f"✅ Extracted {len(raw_data)} listings")
         job["total_extracted"] = len(raw_data)
 
@@ -215,16 +218,49 @@ async def _run_scrape_async(job_id: str, query: str, max_scrolls: int, headless:
         logger.error("Job %s failed: %s", job_id, str(e), exc_info=True)
 
     finally:
-        # We only close the isolated context. 
-        # The global browser stays alive to handle future searches without breaking the loop.
+        # Close all browser resources associated with this scrape job
+        if 'page' in locals() and page:
+            try:
+                await page.close()
+            except Exception:
+                pass
         if 'context' in locals() and context:
             try:
                 await context.close()
             except Exception:
                 pass
+        if 'browser' in locals() and browser:
+            try:
+                await browser.close()
+            except Exception:
+                pass
+        if 'pw' in locals() and pw:
+            try:
+                await pw.stop()
+            except Exception:
+                pass
 
         # Always persist job state to disk
         _save_jobs_index()
+
+
+def _run_scrape_thread(job_id: str, query: str, max_scrolls: int, headless: bool, whatsapp_only: bool):
+    """Wrapper to run the async scrape job in a dedicated thread with a proactor event loop (Windows compatibility)."""
+    import asyncio
+    import sys
+    
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+        
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        loop.run_until_complete(
+            _run_scrape_async(job_id, query, max_scrolls, headless, whatsapp_only)
+        )
+    finally:
+        loop.run_until_complete(loop.shutdown_asyncgens())
+        loop.close()
 
 
 # ---------------------------------------------------------------------------
@@ -254,12 +290,14 @@ async def start_scrape(req: ScrapeRequest):
     # Persist immediately so it shows in history even if queued
     _save_jobs_index()
 
-    # Run scraping asynchronously in the background and prevent GC cleanup
-    task = asyncio.create_task(
-        _run_scrape_async(job_id, req.query, req.max_scrolls, req.headless, req.whatsapp_only)
+    # Run scraping inside a separate thread to avoid Uvicorn Event Loop conflicts on Windows
+    # and prevent blocking the main HTTP event loop
+    thread = threading.Thread(
+        target=_run_scrape_thread,
+        args=(job_id, req.query, req.max_scrolls, req.headless, req.whatsapp_only),
+        daemon=True,
     )
-    running_tasks.add(task)
-    task.add_done_callback(running_tasks.discard)
+    thread.start()
 
     return {"job_id": job_id}
 
