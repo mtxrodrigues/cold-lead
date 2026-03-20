@@ -172,7 +172,7 @@ def export_to_xlsx(
     )
 
     # --- Headers ---
-    headers = ["#", "Name", "Phone", "Address", "Website", "Rating", "Reviews"]
+    headers = ["#", "Name", "Phone", "Emails", "Address", "Website", "Rating", "Reviews"]
     for col, header in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col, value=header)
         cell.font = header_font
@@ -183,13 +183,16 @@ def export_to_xlsx(
     data_font = Font(name="Inter", size=10)
     for i, entry in enumerate(data, 1):
         row = i + 1
+        emails_str = ", ".join(entry.get("emails") or [])
+
         ws.cell(row=row, column=1, value=i).font = data_font
         ws.cell(row=row, column=2, value=entry.get("name", "")).font = data_font
         ws.cell(row=row, column=3, value=entry.get("phone", "")).font = data_font
-        ws.cell(row=row, column=4, value=entry.get("address", "")).font = data_font
-        ws.cell(row=row, column=5, value=entry.get("website", "")).font = data_font
-        ws.cell(row=row, column=6, value=entry.get("rating", "")).font = data_font
-        ws.cell(row=row, column=7, value=entry.get("reviews", "")).font = data_font
+        ws.cell(row=row, column=4, value=emails_str).font = data_font
+        ws.cell(row=row, column=5, value=entry.get("address", "")).font = data_font
+        ws.cell(row=row, column=6, value=entry.get("website", "")).font = data_font
+        ws.cell(row=row, column=7, value=entry.get("rating", "")).font = data_font
+        ws.cell(row=row, column=8, value=entry.get("reviews", "")).font = data_font
 
         # Light border on each row
         for col in range(1, len(headers) + 1):
@@ -199,16 +202,17 @@ def export_to_xlsx(
     ws.column_dimensions["A"].width = 5
     ws.column_dimensions["B"].width = 35
     ws.column_dimensions["C"].width = 18
-    ws.column_dimensions["D"].width = 45
-    ws.column_dimensions["E"].width = 30
-    ws.column_dimensions["F"].width = 8
-    ws.column_dimensions["G"].width = 10
+    ws.column_dimensions["D"].width = 30
+    ws.column_dimensions["E"].width = 45
+    ws.column_dimensions["F"].width = 30
+    ws.column_dimensions["G"].width = 8
+    ws.column_dimensions["H"].width = 10
 
     # --- Freeze header row ---
     ws.freeze_panes = "A2"
 
     # --- Auto-filter ---
-    ws.auto_filter.ref = f"A1:G{len(data) + 1}"
+    ws.auto_filter.ref = f"A1:H{len(data) + 1}"
 
     os.makedirs(os.path.dirname(filepath) or ".", exist_ok=True)
     wb.save(filepath)

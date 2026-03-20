@@ -33,6 +33,7 @@ const resultsBody     = document.getElementById('results-body');
 const downloadBtn     = document.getElementById('download-btn');
 const xlsxBtn         = document.getElementById('xlsx-btn');
 const copyBtn         = document.getElementById('copy-btn');
+const copyEmailsBtn   = document.getElementById('copy-emails-btn');
 
 const historySection  = document.getElementById('history-section');
 const historyList     = document.getElementById('history-list');
@@ -233,6 +234,7 @@ function renderResults(results) {
       <td>${i + 1}</td>
       <td>${escapeHtml(item.name || '—')}</td>
       <td>${escapeHtml(item.phone || '—')}${item.phone ? phoneBadge : ''}</td>
+      <td>${item.emails && item.emails.length ? item.emails.map(e => `<a href="mailto:${escapeHtml(e)}" class="email-link">${escapeHtml(e)}</a>`).join(', ') : '—'}</td>
       <td>${escapeHtml(item.address || '—')}</td>
       <td>${item.rating ? `<span class="rating-badge">★ ${escapeHtml(item.rating)}</span>` : '—'}</td>
       <td>${item.website
@@ -268,6 +270,29 @@ copyBtn.addEventListener('click', () => {
 
   navigator.clipboard.writeText(phones).then(() => {
     showToast(`${currentResults.filter(r => r.phone).length} phones copied!`);
+  }).catch(() => {
+    showToast('Failed to copy', true);
+  });
+});
+
+// ─── Copy emails ─────────────────────────────────────────────
+copyEmailsBtn.addEventListener('click', () => {
+  if (!currentResults.length) return;
+
+  const allEmails = [];
+  currentResults.forEach(r => {
+    if (r.emails && r.emails.length) {
+      allEmails.push(...r.emails);
+    }
+  });
+
+  if (!allEmails.length) {
+    showToast('No emails found in results');
+    return;
+  }
+
+  navigator.clipboard.writeText(allEmails.join('\n')).then(() => {
+    showToast(`${allEmails.length} emails copied!`);
   }).catch(() => {
     showToast('Failed to copy', true);
   });

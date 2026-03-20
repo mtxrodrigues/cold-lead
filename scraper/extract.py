@@ -146,6 +146,15 @@ async def _extract_single_listing(context: BrowserContext, item: dict, index: in
         except Exception:
             logger.debug("Listing %d: website not found", index)
 
+        # --- Extract Emails (New Step) ---
+        emails = []
+        if website:
+            from scraper.email import find_emails_for_url
+            try:
+                emails = await find_emails_for_url(context, website)
+            except Exception as e:
+                logger.debug("Listing %d: email search failed — %s", index, e)
+
         # --- Extract Rating ---
         rating = None
         try:
@@ -170,11 +179,12 @@ async def _extract_single_listing(context: BrowserContext, item: dict, index: in
             "address": address,
             "phone": phone,
             "website": website,
+            "emails": emails,
             "rating": rating,
             "reviews": reviews,
         }
 
-        logger.info("Listing %d: %s | Phone: %s", index, name, phone or "N/A")
+        logger.info("Listing %d: %s | Phone: %s | Emails: %d", index, name, phone or "N/A", len(emails))
         await page.close()
         return result
 
