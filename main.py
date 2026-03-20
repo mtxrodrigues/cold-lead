@@ -12,6 +12,9 @@ import sys
 import os
 import asyncio
 
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
 from dotenv import load_dotenv
 
 from scraper.browser import setup_browser, teardown_browser

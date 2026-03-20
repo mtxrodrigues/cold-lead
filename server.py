@@ -12,12 +12,16 @@ Provides:
 """
 
 import os
+import sys
 import uuid
 import json
 import asyncio
 import logging
 from datetime import datetime
 from pathlib import Path
+
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
@@ -41,6 +45,9 @@ JOBS_INDEX = OUTPUT_DIR / "jobs.json"
 
 # In-memory job store — hydrated from disk on startup
 jobs: dict[str, dict] = {}
+
+# Strong references to running tasks to prevent Python GC from destroying them midway
+running_tasks = set()
 
 logger = logging.getLogger("cold-lead.server")
 logging.basicConfig(
@@ -208,9 +215,11 @@ async def _run_scrape_async(job_id: str, query: str, max_scrolls: int, headless:
         logger.error("Job %s failed: %s", job_id, str(e), exc_info=True)
 
     finally:
-        if pw and browser:
+        # We only close the isolated context. 
+        # The global browser stays alive to handle future searches without breaking the loop.
+        if 'context' in locals() and context:
             try:
-                await teardown_browser(pw, browser)
+                await context.close()
             except Exception:
                 pass
 
@@ -245,10 +254,12 @@ async def start_scrape(req: ScrapeRequest):
     # Persist immediately so it shows in history even if queued
     _save_jobs_index()
 
-    # Run scraping asynchronously in the background
-    asyncio.create_task(
+    # Run scraping asynchronously in the background and prevent GC cleanup
+    task = asyncio.create_task(
         _run_scrape_async(job_id, req.query, req.max_scrolls, req.headless, req.whatsapp_only)
     )
+    running_tasks.add(task)
+    task.add_done_callback(running_tasks.discard)
 
     return {"job_id": job_id}
 
