@@ -17,6 +17,7 @@ import uuid
 import json
 import asyncio
 import logging
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -119,6 +120,36 @@ class ScrapeRequest(BaseModel):
     whatsapp_only: bool = False
 
 
+STATES_MAP = {
+    "acre": "ac", "ac": "ac",
+    "alagoas": "al", "al": "al",
+    "amazonas": "am", "am": "am",
+    "amapá": "ap", "amapa": "ap", "ap": "ap",
+    "bahia": "ba", "ba": "ba",
+    "ceará": "ce", "ceara": "ce", "ce": "ce",
+    "distrito federal": "df", "df": "df",
+    "espírito santo": "es", "espirito santo": "es", "es": "es",
+    "goiás": "go", "goias": "go", "go": "go",
+    "maranhão": "ma", "maranhao": "ma", "ma": "ma",
+    "minas gerais": "mg", "mg": "mg",
+    "mato grosso do sul": "ms", "ms": "ms",
+    "mato grosso": "mt", "mt": "mt",
+    "pará": "pa", "para": "pa", "pa": "pa",
+    "paraíba": "pb", "paraiba": "pb", "pb": "pb",
+    "pernambuco": "pe", "pe": "pe",
+    "piauí": "pi", "piaui": "pi", "pi": "pi",
+    "paraná": "pr", "parana": "pr", "pr": "pr",
+    "rio de janeiro": "rj", "rj": "rj",
+    "rio grande do norte": "rn", "rn": "rn",
+    "rondônia": "ro", "rondonia": "ro", "ro": "ro",
+    "roraima": "rr", "rr": "rr",
+    "rio grande do sul": "rs", "rs": "rs",
+    "santa catarina": "sc", "sc": "sc",
+    "sergipe": "se", "se": "se",
+    "são paulo": "sp", "sao paulo": "sp", "sp": "sp",
+    "tocantins": "to", "to": "to"
+}
+
 # ---------------------------------------------------------------------------
 # Scraping worker (runs in a background thread)
 # ---------------------------------------------------------------------------
@@ -137,79 +168,122 @@ async def _run_scrape_async(job_id: str, query: str, max_scrolls: int, headless:
 
     pw = None
     browser = None
+    context = None
+    page = None
 
     try:
         job["status"] = "running"
-        log("🚀 Starting parallel scraper...")
+        log("🚀 Starting scraper engine...")
 
-        # Step 1: Browser
-        log("🌐 Launching browser...")
-        pw, browser, context, page = await setup_browser(headless=headless)
+        base_query = query.strip()
+        target_uf = None
+        
+        # Match ' em [estado]'
+        match = re.search(r'(?i)\b(?:em|no|na|in|de)\s+(.+)$', base_query)
+        if match and match.group(1).strip().lower() in STATES_MAP:
+            target_uf = STATES_MAP[match.group(1).strip().lower()]
+            base_query = base_query[:match.start()].strip()
+        else:
+            # Trailing UF check
+            tokens = base_query.split()
+            if len(tokens) > 1 and tokens[-1].lower() in STATES_MAP:
+                target_uf = STATES_MAP[tokens[-1].lower()]
+                base_query = " ".join(tokens[:-1])
+
+        cities = []
+        if target_uf:
+            cities_file = Path(__file__).parent / "cities-data" / f"{target_uf}.json"
+            if cities_file.exists():
+                with open(cities_file, "r", encoding="utf-8") as f:
+                    cities = json.load(f)
+                    
+        if cities:
+            log(f"🗺️ State Multi-Search: {len(cities)} cities in {target_uf.upper()} detected")
+        else:
+            cities = [None] 
+
+        log("🌐 Launching browser context...")
+        pw, browser, context, default_page = await setup_browser(headless=headless)
+        await default_page.close()
         log("✅ Browser ready")
 
-        # Step 2: Search
-        log(f'🔍 Searching: "{query}"')
-        await search_maps(page, query)
-        log("✅ Search results loaded")
+        all_results = []
+        seen_phones = set()
+        
+        job["total_found"] = 0
+        job["total_extracted"] = 0
 
-        # Step 3: Scroll
-        log(f"📜 Scrolling results (max {max_scrolls} scrolls)...")
-        total_found = await scroll_results(page, max_scrolls=max_scrolls)
-        log(f"✅ Found {total_found} listings after scrolling")
-        job["total_found"] = total_found
+        for i, city in enumerate(cities):
+            if city:
+                current_query = f"{base_query} em {city} - {target_uf.upper()}"
+                if len(cities) > 1:
+                    log(f"📍 City {i+1}/{len(cities)}: Searching '{current_query}'")
+            else:
+                current_query = query
+                log(f"🔍 Searching exactly: '{current_query}'")
 
-        # Step 4: Extract (Phase 1 & 2)
-        log("🔗 Collecting URLs from results feed...")
-        locations = await collect_listing_urls(page)
-        try:
-            await page.close()
-        except Exception:
-            pass
+            page = await context.new_page()
+            
+            try:
+                await search_maps(page, current_query)
+                found = await scroll_results(page, max_scrolls=max_scrolls)
+                job["total_found"] += found
 
-        log("⛏️ Extracting data from each listing in parallel...")
-        raw_data = await extract_listings_parallel(context, locations, max_concurrent=7)
-        log(f"✅ Extracted {len(raw_data)} listings")
-        job["total_extracted"] = len(raw_data)
+                locations = await collect_listing_urls(page)
+                await page.close()
+                page = None
 
-        # Step 5: Filter — phone
-        log("📞 Filtering listings without phone...")
-        filtered = filter_with_phone(raw_data)
-        job["total_with_phone"] = len(filtered)
-        job["total_without_phone"] = len(raw_data) - len(filtered)
-        whatsapp_count = sum(1 for e in filtered if e.get("is_whatsapp"))
-        landline_count = len(filtered) - whatsapp_count
-        log(f"✅ {len(filtered)} with phone ({whatsapp_count} WhatsApp, {landline_count} landline)")
+                if locations:
+                    raw_data = await extract_listings_parallel(context, locations, max_concurrent=5)
+                    job["total_extracted"] += len(raw_data)
+                    
+                    filtered = filter_with_phone(raw_data)
+                    if whatsapp_only:
+                        filtered = filter_whatsapp_only(filtered)
 
-        # Step 5b: Filter — WhatsApp only (if enabled)
-        if whatsapp_only:
-            log("📱 Filtering for WhatsApp numbers only...")
-            filtered = filter_whatsapp_only(filtered)
-            log(f"✅ {len(filtered)} WhatsApp leads kept")
+                    new_leads = 0
+                    for r in filtered:
+                        phone = r.get("phone")
+                        if phone and phone not in seen_phones:
+                            seen_phones.add(phone)
+                            all_results.append(r)
+                            new_leads += 1
+                            
+                    job["total_with_phone"] = len(all_results)
+                    job["total_without_phone"] = job["total_extracted"] - job["total_with_phone"]
+                    
+                    job["results"] = all_results
+                    
+                    if new_leads > 0:
+                        log(f"✅ Found {new_leads} new leads in this segment (Total: {len(all_results)})")
+                        
+                        # Partial save to disk
+                        json_filename = make_filename(query, ext="json")
+                        output_path = save_to_json(
+                            all_results,
+                            filename=json_filename,
+                            output_dir=str(OUTPUT_DIR),
+                            query=query,
+                        )
+                        job["output_file"] = json_filename
+                        
+                        xlsx_filename = make_filename(query, ext="xlsx")
+                        xlsx_path = str(OUTPUT_DIR / xlsx_filename)
+                        export_to_xlsx(all_results, filepath=xlsx_path, query=query)
+                        job["xlsx_file"] = xlsx_filename
+            except Exception as e:
+                log(f"⚠️ Search failed for {current_query}: {str(e)}", level="error")
+                if page:
+                    try:
+                        await page.close()
+                    except Exception:
+                        pass
+                continue
+                
+            _save_jobs_index()
 
-        job["total_whatsapp"] = sum(1 for e in filtered if e.get("is_whatsapp"))
-        job["total_leads"] = len(filtered)
-
-        # Step 6: Save JSON with descriptive filename
-        json_filename = make_filename(query, ext="json")
-        output_path = save_to_json(
-            filtered,
-            filename=json_filename,
-            output_dir=str(OUTPUT_DIR),
-            query=query,
-        )
-        job["output_file"] = json_filename
-        log(f"💾 Saved JSON: {json_filename}")
-
-        # Step 7: Also save XLSX
-        xlsx_filename = make_filename(query, ext="xlsx")
-        xlsx_path = str(OUTPUT_DIR / xlsx_filename)
-        export_to_xlsx(filtered, filepath=xlsx_path, query=query)
-        job["xlsx_file"] = xlsx_filename
-        log(f"📊 Saved XLSX: {xlsx_filename}")
-
-        job["results"] = filtered
         job["status"] = "done"
-        log("🎉 Scraping complete!")
+        log(f"🎉 Scraping complete! Captured {len(all_results)} verified leads.")
 
     except Exception as e:
         job["status"] = "error"

@@ -18,7 +18,6 @@ build/
 .idea/
 
 # Output files
-*.json
 !package.json
 
 # OS
