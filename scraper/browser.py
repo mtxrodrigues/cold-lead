@@ -45,8 +45,8 @@ async def setup_browser(headless: bool = True, timeout: int = 60_000) -> tuple:
         user_agent=USER_AGENT,
         viewport={"width": 1280, "height": 900},
         locale="pt-BR",
-        geolocation={"latitude": -23.5505, "longitude": -46.6333},  # São Paulo
-        permissions=["geolocation"],
+        # Geolocalização fixa removida para que o scraper não saiba a sua localização 
+        # e busque em nível nacional (Brasil) dependendo da query.
     )
 
     page = await context.new_page()

@@ -17,7 +17,9 @@ async def search_maps(page: Page, query: str) -> None:
     import urllib.parse
 
     encoded = urllib.parse.quote(query)
-    url = f"https://www.google.com/maps/search/{encoded}/"
+    # Para buscas genéricas, ancoramos o mapa no centro geográfico do Brasil com um zoom 
+    # abrangente (4z), evitando que o Google direcione a busca baseada no IP da sua máquina.
+    url = f"https://www.google.com/maps/search/{encoded}/@-14.235004,-51.92528,4z?hl=pt-BR&gl=BR"
 
     logger.info("Navigating to Google Maps: %s", url)
     await page.goto(url, wait_until="domcontentloaded")

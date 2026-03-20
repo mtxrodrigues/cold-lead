@@ -134,29 +134,22 @@ cold-lead/
 
 ---
 
-## How It Works
+## How It Works (Parallel Architecture)
 
 ### 1. Browser Setup (`scraper/browser.py`)
-Launches a Chromium browser via Playwright with anti-detection flags, a realistic user-agent, and pt-BR locale with São Paulo geolocation.
+Launches a Chromium browser via **Playwright Async API**. The browser instance is kept alive globally (`_global_browser`) to prevent event-loop crashes between multiple API requests. It uses anti-detection flags, a realistic user-agent, and a `pt-BR` locale. The strict geolocation was removed to gracefully handle nationwide searches without local IP bias.
 
 ### 2. Search (`scraper/extract.py`)
-Navigates directly to `google.com/maps/search/{query}` — more reliable than typing into the search box. Handles cookie consent dialogs in English and Portuguese.
+Navigates directly to the Google Maps search URL. To prevent Google from biasing results based on the server's IP address (e.g. only showing local clinics), the scraper forces a nationwide anchor using viewport coordinates (`@-14.235004,-51.92528,4z`) along with `hl=pt-BR&gl=BR`.
 
-### 3. Scroll (`scraper/scroll.py`)
-The Google Maps sidebar (`div[role="feed"]`) lazy-loads results as you scroll. The scraper scrolls the last item into view repeatedly until:
-- The "end of list" message appears, or
-- No new results load after multiple attempts
+### 3. Scroll & Phase 1 Discovery (`scraper/scroll.py` & `extract.py`)
+The Google Maps sidebar (`div[role="feed"]`) lazy-loads results as it is scrolled. Once all listings are loaded, the script performs **Phase 1**: rapidly collecting the direct URLs (`href`) of all business listings without clicking on them explicitly.
 
-### 4. Extract (`scraper/extract.py`)
-For each listing card, the scraper:
-1. **Clicks** into the listing to open the detail panel
-2. **Extracts** name (`h1`), address, phone, website, rating, and reviews
-3. **Navigates back** to the results list
-
-It uses **`data-item-id`** attributes (e.g., `phone`, `address`, `authority`) as primary selectors, with **`aria-label`** fallbacks — both are more stable than CSS class names which Google changes frequently.
+### 4. Phase 2 Parallel Extraction (`scraper/extract.py`)
+Instead of sequentially clicking items and navigating back and forth, the scraper opens up to **5 concurrent background tabs** (controlled via `asyncio.Semaphore(5)`). It navigates directly to the businesses' detail URLs, extracts their Name, Phone (`data-item-id^="phone:tel:"`), Address, Website, Rating, and Reviews, and then cleanly closes the individual tabs. This multiplies extraction speed drastically.
 
 ### 5. Filter & Save (`scraper/output.py`)
-Removes any listing without a valid phone number and writes the clean data to a JSON file with metadata.
+Removes any listing without a valid phone number (and differentiates WhatsApp from Landlines) and writes the clean data to localized JSON and XLSX files.
 
 ---
 
@@ -164,7 +157,8 @@ Removes any listing without a valid phone number and writes the clean data to a 
 
 - [x] **REST API** — FastAPI with SSE real-time progress
 - [x] **Web UI** — Dark-mode frontend with live stats
-- [ ] **Async support** — Playwright async API for better throughput
+- [x] **Async Parallel Execution** — Playwright Async API implemented for drastically faster throughput
+- [x] **Windows Compatibility** — Fully compatible natively with Windows `ProactorEventLoop`
 - [ ] **Proxy rotation** — Avoid rate-limiting on large scrapes
 - [ ] **Database storage** — PostgreSQL/MongoDB for persistent data
 - [ ] **Scheduled runs** — Cron-based periodic scraping
